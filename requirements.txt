@@ -1,7 +1,8 @@
-import streamlit
-import pandas
-import requests
-import BeautifulSoup
-import plotly.express
-import plotly.graph_objects
-import Fred
+streamlit
+pandas
+requests
+beautifulsoup4
+plotly
+fredapi
+matplotlib
+fear_and_greed
