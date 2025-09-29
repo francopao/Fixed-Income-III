@@ -7,3 +7,4 @@ fredapi
 matplotlib
 fear_and_greed
 XlsxWriter
+os
