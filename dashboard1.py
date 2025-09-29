@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import requests
@@ -123,7 +124,7 @@ def graficar_fred(datos, titulo, series, zoom=False):
 # --------------------------------------
 
 st.set_page_config(layout="wide")
-st.image("https://media.licdn.com/dms/image/v2/C4E0BAQHGRK4sbvBk8w/company-logo_200_200/company-logo_200_200/0/1664209061611/decision_capital_eirl_logo?e=2147483647&v=beta&t=dS9RqOZoCN82k_Jqg6JF9Fm7MAQlNUSfIrEuQdLg_qQ", 
+st.image("https://media.licdn.com/dms/image/v2/D4E03AQHNhGZoA9sCQA/profile-displayphoto-shrink_200_200/B4EZahq4dLGQAg-/0/1746469097627?e=2147483647&v=beta&t=hAA0K9UwE_sigpOhx5y4U4soabNV6x8H8O-VZBDvhbM", 
          width=200)
 st.title("Global Fixed Income Dashboard - Franco Olivares")
 
@@ -375,16 +376,15 @@ with tab4:
     st.subheader("Análisis Comparativo de Activos de Equity y Bonos")
 
     import yfinance as yf
+    import socket
+    import plotly.express as px
+    import plotly.graph_objects as go
+    import pandas as pd
+    from datetime import datetime
 
-    tickers = {
-        "VIX": "^VIX",
-        "S&P 500": "^GSPC",
-        "ETF TLT (Bonos Largo Plazo)": "TLT",
-        "ETF IEF (Bonos Mediano Plazo)": "IEF"
-    }
-
-    fecha_inicio = "2018-02-02"
-
+    # -------------------------
+    # Función para descargar datos
+    # -------------------------
     @st.cache_data
     def descargar_datos(tickers_dict, start):
         series = []
@@ -406,13 +406,27 @@ with tab4:
             return pd.DataFrame()
 
         return pd.concat(series, axis=1, join="inner").rename(columns=dict(zip(nombres_validos, nombres_validos)))
-    
+
+    # -------------------------
+    # Variables y descarga de datos
+    # -------------------------
+    tickers = {
+        "VIX": "^VIX",
+        "S&P 500": "^GSPC",
+        "ETF TLT (Bonos Largo Plazo)": "TLT",
+        "ETF IEF (Bonos Mediano Plazo)": "IEF"
+    }
+
+    fecha_inicio = "2018-02-02"
     precios = descargar_datos(tickers, fecha_inicio)
 
     if precios.empty:
         st.error("No se pudieron descargar datos válidos. Verifica tu conexión o los tickers.")
         st.stop()
 
+    # -------------------------
+    # Primer gráfico: Variaciones acumuladas
+    # -------------------------
     variaciones = precios.pct_change().fillna(0)
     variaciones_acumuladas = (1 + variaciones).cumprod() - 1
 
@@ -433,39 +447,35 @@ with tab4:
         template="plotly_white",
         legend_title_text="",
         margin=dict(l=30, r=30, t=60, b=40),
-        annotations=[
-            dict(
-                xref="paper", yref="paper",
-                x=0.01, y=0.99,
-                xanchor="left", yanchor="top",
-                align="left",
-                text="<br>".join(leyenda_info),
-                showarrow=False,
-                font=dict(size=12),
-                bordercolor="black",
-                borderwidth=1,
-                bgcolor="white",
-                opacity=0.9
-            )
-        ]
+        annotations=[dict(
+            xref="paper", yref="paper",
+            x=0.01, y=0.99,
+            xanchor="left", yanchor="top",
+            align="left",
+            text="<br>".join(leyenda_info),
+            showarrow=False,
+            font=dict(size=12),
+            bordercolor="black",
+            borderwidth=1,
+            bgcolor="white",
+            opacity=0.9
+        )]
     )
 
     st.plotly_chart(fig_equity, use_container_width=True)
-    
-    import socket
-try:
-    socket.create_connection(("finance.yahoo.com", 80))
-except OSError:
-    st.error("🚫 No hay conexión con Yahoo Finance.")
-    st.stop()
 
+    # -------------------------
+    # Comprobación conexión
+    # -------------------------
+    try:
+        socket.create_connection(("finance.yahoo.com", 80))
+    except OSError:
+        st.error("🚫 No hay conexión con Yahoo Finance.")
+        st.stop()
 
-
-    # -------------------------------
-    # Segundo gráfico - Sectores
-    # -------------------------------
-    st.subheader("Rentabilidad Acumulada por Sector desde Fecha Elegida")
-
+    # -------------------------
+    # Segundo gráfico: Rentabilidad sectorial
+    # -------------------------
     tickers_sectoriales = {
         "Tecnología (XLK)": "XLK",
         "Salud (XLV)": "XLV",
@@ -535,7 +545,6 @@ except OSError:
     colores = rentabilidad.apply(lambda x: "green" if x > 4 else ("gray" if 0 <= x <= 4 else "red"))
 
     fig_bar = go.Figure()
-
     fig_bar.add_trace(go.Bar(
         x=rentabilidad.values,
         y=rentabilidad.index,
@@ -559,187 +568,183 @@ except OSError:
 
 
     # === GRÁFICO 3 ===
-
-from datetime import datetime, timedelta
-
-
-st.subheader("ETFs sobre renta fija")
-
-# Definir tickers y fechas
-bonos_tickers = ["CEMB", "TLT", "SHY", "EBND", "EMB"]
-start_bonos = datetime.today() - timedelta(days=365 * 10)
-end_bonos = datetime.today()
-
-# Descargar datos
-bonos_data = {"Ticker": [], "Precio Actual": [], "Precio Máximo": [], "Precio Mínimo": []}
-for ticker in bonos_tickers:
-    df = yf.download(ticker, start=start_bonos, end=end_bonos)
-    df = df.dropna()
-    bonos_data["Ticker"].append(ticker)
-    bonos_data["Precio Actual"].append(df["Close"].iloc[-1])
-    bonos_data["Precio Máximo"].append(df["Close"].max())
-    bonos_data["Precio Mínimo"].append(df["Close"].min())
-
-df_bonos = pd.DataFrame(bonos_data)
-
-# Crear figura Plotly
-fig = go.Figure()
-
-# Dibujar líneas y puntos
-for i, row in df_bonos.iterrows():
-    ticker = row['Ticker']
-    actual = float(row['Precio Actual'])
-    maximo = float(row['Precio Máximo'])
-    minimo = float(row['Precio Mínimo'])
-
-    # Línea vertical (mínimo a máximo)
-    fig.add_trace(go.Scatter(
-        x=[ticker, ticker],
-        y=[minimo, maximo],
-        mode='lines',
-        line=dict(color='gray', width=2),
-        showlegend=False  # No mostrar en leyenda
-    ))
-
-    # Punto máximo
-    fig.add_trace(go.Scatter(
-        x=[ticker],
-        y=[maximo],
-        mode='markers+text',
-        marker=dict(color='green', size=10, symbol='diamond'),  # Hago el máximo más visible (diamante)
-        text=["Máx"],
-        textposition="top center",
-        name="Máximo",
-        showlegend=(i == 0)  # Solo mostrar en primer iteración
-    ))
-
-    # Punto mínimo
-    fig.add_trace(go.Scatter(
-        x=[ticker],
-        y=[minimo],
-        mode='markers+text',
-        marker=dict(color='red', size=10, symbol='diamond'),
-        text=["Mín"],
-        textposition="bottom center",
-        name="Mínimo",
-        showlegend=(i == 0)
-    ))
-
-    # Punto precio actual
-    fig.add_trace(go.Scatter(
-        x=[ticker],
-        y=[actual],
-        mode='markers+text',
-        marker=dict(color='blue', size=12, symbol='circle'),  # Cambio a azul fuerte el precio actual
-        text=[f"{actual:.1f}"],
-        textposition="middle right",
-        name="Precio Actual",
-        showlegend=(i == 0)
-    ))
-
-# Ajustes de layout
-
-fig.update_layout(
-    title="Precio en los últimos 10 Años: Actual, Mínimo y Máximo",
-    xaxis_title="ETF",
-    yaxis_title="Precio (USD)",
-    xaxis=dict(type='category'),
-    legend=dict(
-        orientation="h",
-        yanchor="bottom",
-        y=1.02,
-        xanchor="right",
-        x=1
-    ),
-    annotations=[
-        dict(
-            xref='paper', yref='paper',
-            x=0, y=-0.1,
-            text=(
-                "<b>ETF:</b> "
-                "EMB: Bonos soberanos y corporativos en EMEs. "
-                "EBND: Bonos emitidos en MN de EMEs. "
-                "TLT: 20Yr Treasury. "
-                "SHY: 1Yr - 3Yr Treasury. "
-                "CEMB: Bonos corporativos en EMEs."
-            ),
-            showarrow=False,
-            font=dict(size=10, color="gray"),
-            align="left"
-        )
-    ],
-    height=500,  # Subo un poco el alto para que no quede apretado
-    margin=dict(l=40, r=40, t=60, b=120),
-    template="plotly_white"
-)
-
-
-# Mostrar en Streamlit
-st.plotly_chart(fig, use_container_width=True)
+    from datetime import datetime, timedelta
+    
+    
+    
+    # Definir tickers y fechas
+    bonos_tickers = ["CEMB", "TLT", "SHY", "EBND", "EMB"]
+    start_bonos = datetime.today() - timedelta(days=365 * 10)
+    end_bonos = datetime.today()
+    
+    # Descargar datos
+    bonos_data = {"Ticker": [], "Precio Actual": [], "Precio Máximo": [], "Precio Mínimo": []}
+    for ticker in bonos_tickers:
+        df = yf.download(ticker, start=start_bonos, end=end_bonos)
+        df = df.dropna()
+        bonos_data["Ticker"].append(ticker)
+        bonos_data["Precio Actual"].append(df["Close"].iloc[-1])
+        bonos_data["Precio Máximo"].append(df["Close"].max())
+        bonos_data["Precio Mínimo"].append(df["Close"].min())
+    
+    df_bonos = pd.DataFrame(bonos_data)
+    
+    # Crear figura Plotly
+    fig = go.Figure()
+    
+    # Dibujar líneas y puntos
+    for i, row in df_bonos.iterrows():
+        ticker = row['Ticker']
+        actual = float(row['Precio Actual'])
+        maximo = float(row['Precio Máximo'])
+        minimo = float(row['Precio Mínimo'])
+    
+        # Línea vertical (mínimo a máximo)
+        fig.add_trace(go.Scatter(
+            x=[ticker, ticker],
+            y=[minimo, maximo],
+            mode='lines',
+            line=dict(color='gray', width=2),
+            showlegend=False  # No mostrar en leyenda
+        ))
+    
+        # Punto máximo
+        fig.add_trace(go.Scatter(
+            x=[ticker],
+            y=[maximo],
+            mode='markers+text',
+            marker=dict(color='green', size=10, symbol='diamond'),  # Hago el máximo más visible (diamante)
+            text=["Máx"],
+            textposition="top center",
+            name="Máximo",
+            showlegend=(i == 0)  # Solo mostrar en primer iteración
+        ))
+    
+        # Punto mínimo
+        fig.add_trace(go.Scatter(
+            x=[ticker],
+            y=[minimo],
+            mode='markers+text',
+            marker=dict(color='red', size=10, symbol='diamond'),
+            text=["Mín"],
+            textposition="bottom center",
+            name="Mínimo",
+            showlegend=(i == 0)
+        ))
+    
+        # Punto precio actual
+        fig.add_trace(go.Scatter(
+            x=[ticker],
+            y=[actual],
+            mode='markers+text',
+            marker=dict(color='blue', size=12, symbol='circle'),  # Cambio a azul fuerte el precio actual
+            text=[f"{actual:.1f}"],
+            textposition="middle right",
+            name="Precio Actual",
+            showlegend=(i == 0)
+        ))
+    
+    # Ajustes de layout
+    
+    fig.update_layout(
+        title="Precio en los últimos 10 Años: Actual, Mínimo y Máximo",
+        xaxis_title="ETF",
+        yaxis_title="Precio (USD)",
+        xaxis=dict(type='category'),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
+        annotations=[
+            dict(
+                xref='paper', yref='paper',
+                x=0, y=-0.1,
+                text=(
+                    "<b>ETF:</b> "
+                    "EMB: Bonos soberanos y corporativos en EMEs. "
+                    "EBND: Bonos emitidos en MN de EMEs. "
+                    "TLT: 20Yr Treasury. "
+                    "SHY: 1Yr - 3Yr Treasury. "
+                    "CEMB: Bonos corporativos en EMEs."
+                ),
+                showarrow=False,
+                font=dict(size=10, color="gray"),
+                align="left"
+            )
+        ],
+        height=500,  # Subo un poco el alto para que no quede apretado
+        margin=dict(l=40, r=40, t=60, b=120),
+        template="plotly_white"
+    )
+    
+    
+    # Mostrar en Streamlit
+    st.plotly_chart(fig, use_container_width=True)
 
 
     # === GRÁFICO 4 ===
 
-st.subheader("Ranking de Rentabilidad Acumulada de Acciones")
-
 
 
 # Lista de acciones a analizar
-acciones = ["AAPL", "MSFT", "GOOG", "AMZN", "NVDA", "TSLA", "META", "BRK-B", "V", "JNJ", "WMT", "PG", "JPM", "UNH", "HD", "MA", "LLY"]
-
-# Selector de fecha inicial
-fecha_inicio_stock = st.date_input(
-    "Selecciona la fecha inicial para el cálculo de rentabilidad:",
-    value=datetime(2024, 11, 5),
-    min_value=datetime(2017, 1, 1),
-    max_value=datetime.today()
-)
-
-
-def descargar_datos_acciones(lista_tickers, fecha_inicio):
-    datos = yf.download(lista_tickers, start=fecha_inicio)["Close"]
-    return datos
-
-# Descargar precios
-precios_acciones = descargar_datos_acciones(acciones, fecha_inicio_stock)
-
-if precios_acciones.empty:
-    st.error("No se pudieron descargar datos de acciones.")
-    st.stop()
-
-# Cálculo de rentabilidad acumulada
-variaciones_acciones = precios_acciones.pct_change().fillna(0)
-variaciones_acumuladas_acciones = (1 + variaciones_acciones).cumprod() - 1
-
-# Tomar solo el último valor (rentabilidad final acumulada)
-rentabilidad_final = variaciones_acumuladas_acciones.iloc[-1].sort_values(ascending=False)
-
-# Crear DataFrame para Plotly
-df_rentabilidad = rentabilidad_final.reset_index()
-df_rentabilidad.columns = ["Acción", "Rentabilidad"]
-
-# Gráfico de barras horizontales
-fig_ranking = px.bar(
-    df_rentabilidad,
-    x="Rentabilidad",
-    y="Acción",
-    orientation="h",
-    color="Rentabilidad",
-    color_continuous_scale="RdYlGn",
-    labels={"Rentabilidad": "Rentabilidad Acumulada", "Acción": "Acción"},
-    title=f"Rentabilidad Acumulada desde {fecha_inicio_stock.strftime('%Y-%m-%d')}",
-    text_auto=".2%",
-)
-
-fig_ranking.update_layout(
-    height=650,
-    template="plotly_white",
-    coloraxis_showscale=False,
-    margin=dict(l=40, r=40, t=60, b=40),
-    yaxis=dict(categoryorder="total ascending"),
-)
-
-st.plotly_chart(fig_ranking, use_container_width=True)
+    acciones = ["AAPL", "MSFT", "GOOG", "AMZN", "NVDA", "TSLA", "META", "BRK-B", "V", "JNJ", "WMT", "PG", "JPM", "UNH", "HD", "MA", "LLY"]
+    
+    # Selector de fecha inicial
+    fecha_inicio_stock = st.date_input(
+        "Selecciona la fecha inicial para el cálculo de rentabilidad:",
+        value=datetime(2024, 11, 5),
+        min_value=datetime(2017, 1, 1),
+        max_value=datetime.today()
+    )
+    
+    
+    def descargar_datos_acciones(lista_tickers, fecha_inicio):
+        datos = yf.download(lista_tickers, start=fecha_inicio)["Close"]
+        return datos
+    
+    # Descargar precios
+    precios_acciones = descargar_datos_acciones(acciones, fecha_inicio_stock)
+    
+    if precios_acciones.empty:
+        st.error("No se pudieron descargar datos de acciones.")
+        st.stop()
+    
+    # Cálculo de rentabilidad acumulada
+    variaciones_acciones = precios_acciones.pct_change().fillna(0)
+    variaciones_acumuladas_acciones = (1 + variaciones_acciones).cumprod() - 1
+    
+    # Tomar solo el último valor (rentabilidad final acumulada)
+    rentabilidad_final = variaciones_acumuladas_acciones.iloc[-1].sort_values(ascending=False)
+    
+    # Crear DataFrame para Plotly
+    df_rentabilidad = rentabilidad_final.reset_index()
+    df_rentabilidad.columns = ["Acción", "Rentabilidad"]
+    
+    # Gráfico de barras horizontales
+    fig_ranking = px.bar(
+        df_rentabilidad,
+        x="Rentabilidad",
+        y="Acción",
+        orientation="h",
+        color="Rentabilidad",
+        color_continuous_scale="RdYlGn",
+        labels={"Rentabilidad": "Rentabilidad Acumulada", "Acción": "Acción"},
+        title=f"Rentabilidad Acumulada desde {fecha_inicio_stock.strftime('%Y-%m-%d')}",
+        text_auto=".2%",
+    )
+    
+    fig_ranking.update_layout(
+        height=650,
+        template="plotly_white",
+        coloraxis_showscale=False,
+        margin=dict(l=40, r=40, t=60, b=40),
+        yaxis=dict(categoryorder="total ascending"),
+    )
+    
+    st.plotly_chart(fig_ranking, use_container_width=True)
 
 
 
@@ -747,38 +752,38 @@ st.plotly_chart(fig_ranking, use_container_width=True)
 
 
     # === GRÁFICO 5 ===
-st.subheader("Fear and Greed Index")
 
     # Obtener el objeto de fear_and_greed
-output = fear_and_greed.get()
+    output = fear_and_greed.get()
+        
+        # Acceder a los atributos
+    value = output.value
+    description = output.description
     
-    # Acceder a los atributos
-value = output.value
-description = output.description
-
-    # Crear el gráfico tipo gauge
-fig = go.Figure(go.Indicator(
-        mode="gauge+number+delta",
-        value=value,
-        domain={'x': [0, 1], 'y': [0, 1]},
-        title={'text': f"Fear and Greed Index: {description.upper()}"},
-        gauge={
-            'axis': {'range': [0, 100]},
-            'steps': [
-                {'range': [0, 25], 'color': "#d62728"},         # Extreme Fear
-                {'range': [25, 50], 'color': "#ff7f0e"},        # Fear
-                {'range': [50, 75], 'color': "#1f77b4"},        # Greed
-                {'range': [75, 100], 'color': "#2ca02c"}        # Extreme Greed
-            ],
-            'threshold': {
-                'line': {'color': "black", 'width': 4},
-                'thickness': 0.75,
-                'value': value
+        # Crear el gráfico tipo gauge
+    fig = go.Figure(go.Indicator(
+            mode="gauge+number+delta",
+            value=value,
+            domain={'x': [0, 1], 'y': [0, 1]},
+            title={'text': f"Fear and Greed Index: {description.upper()}"},
+            gauge={
+                'axis': {'range': [0, 100]},
+                'steps': [
+                    {'range': [0, 25], 'color': "#d62728"},         # Extreme Fear
+                    {'range': [25, 50], 'color': "#ff7f0e"},        # Fear
+                    {'range': [50, 75], 'color': "#1f77b4"},        # Greed
+                    {'range': [75, 100], 'color': "#2ca02c"}        # Extreme Greed
+                ],
+                'threshold': {
+                    'line': {'color': "black", 'width': 4},
+                    'thickness': 0.75,
+                    'value': value
+                }
             }
-        }
-    ))
+        ))
+    
+    fig.update_layout(height=400)
+    
+        # Mostrar el gráfico dentro del Tab
+    st.plotly_chart(fig, use_container_width=True)
 
-fig.update_layout(height=400)
-
-    # Mostrar el gráfico dentro del Tab
-st.plotly_chart(fig, use_container_width=True)
